@@ -16,14 +16,11 @@ contract Token is ERC1155, Ownable {
 //NOTE ensure each is updated as needed
     // Data for seasons
     mapping(uint256 => uint16) public tokenSeason; // id => season
-//|    mapping(uint16 => uint256[]) public seasonTokens; // season => array containing id of each token in season //NOTE this may be unnecessary as functionality can be done in reverse (tokensSeason)
-//|   uint16[] public seasons; // array containing numeric name of each season //NOTE same as above
-//|    uint16 public seasonsQuantity; // size of seasons (i.e. number of seasons) //NOTE same as above
 //NOTE ensure each is updated as needed
     // Data for enumeration of held (including for sale) tokens
-    uint256[] tokensHeld; // array containing each token id this contract holds  //TODO ensure if held tokenId's balance is 0 => remove from arr
-    uint256 tokensHeldSize; // size of tokensHeld (i.e. number of unique tokens contract holds)
-    mapping(uint256 => uint256) public tokensHeldBalances; // token held id => balances
+    uint256[] tokensHeld; // array containing each token tokenId this contract holds that has not been set for sale  //TODO ensure if held tokenId's balance is 0 => remove from arr
+    uint256 tokensHeldSize; // size of tokensHeld (i.e. number of unique tokens contract holds not for sale)
+    mapping(uint256 => uint256) public tokensHeldBalances; // held not-on-sale tokenid => balances
 
     // uint256[] tokens; // array of each existing tokenId //NOTE if I determine I need this, add to funcs necessary functionality
 
@@ -39,22 +36,10 @@ contract Token is ERC1155, Ownable {
         return season;
     }
 
-    // //NOTE: only include this if decide to use seasonTokens
-    // function getTokenIdBySeason(uint16 season, uint16 index) public view returns(uint256) {
-    //     uint256 tokenId = seasonTokens[season][index];
-    //     return tokenId;
-    // }
 
-
-    // function _addTokenIdToSeason(uint256 tokenId, uint16 season) private {
-    //     require(tokenSeason == 0, "tokenId already exists"); // tokenSeason confirms inexistence if value is 0
-    //     //_tokenIdExists
-    //     tokenSeason[tokenId] = season;
-    //     // seasonTokens //TODO if decide to use this, set it (may also need extra global array/mapping to be set to enumerate)
-    // }
-    // function _tokenIdExists(uint256 tokenId) private {
-    //     require(tokenSeason == 0, "tokenId already exists"); // tokenSeason confirms inexistence if value is 0
-    // }
+    function _tokenExists(uint256 tokenId) private view returns(bool) {
+        return tokenSeason[tokenId] != 0; // tokenSeason confirms inexistence if value is 0
+    }
 
 
 
@@ -66,10 +51,7 @@ contract Token is ERC1155, Ownable {
         } else {
             tokenSeason[id] = season; // if token doesn't exist, add it and its season
         }
-        //TODO If I decide to use it: add to seasonTokens (+ seasons + seasonsQuantity)
-
         _mint(address(this), id, amount, "");
-
         if (tokensHeldBalances[id] == 0) { // if new token
             tokensHeld.push(id); //TODO ensure removed upon sale
 	        tokensHeldSize = tokensHeld.length;  //TEST should += 1 //TODO ensure removed upon sale
@@ -88,7 +70,6 @@ contract Token is ERC1155, Ownable {
             } else {
                 tokenSeason[ids[i]] = season; // if token doesn't exist, add it and its season
             }
-            //TODO If I decide to use it: add to seasonTokens (+ seasons + seasonsQuantity)
             if (tokensHeldBalances[ids[i]] == 0) { // if new token
                 tokensHeld.push(ids[i]); //TODO ensure removed upon sale
                 tokensHeldSize = tokensHeld.length;  //TEST should += 1 //TODO ensure removed upon sale
@@ -101,5 +82,9 @@ contract Token is ERC1155, Ownable {
 
 
 
-    function withdraw() external onlyOwner {}
+    function withdraw() external onlyOwner {
+        require(address(this).balance > 0, "Balance must be positive");
+        (bool success, ) = msg.sender.call{value: address(this).balance}("");
+        require(success == true, "Failed to withdraw ether");
+    }
 }
