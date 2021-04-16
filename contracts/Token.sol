@@ -67,28 +67,20 @@ contract Token is ERC1155, Ownable {
             tokenSeason[id] = season; // if token doesn't exist, add it and its season
         }
         //TODO If I decide to use it: add to seasonTokens (+ seasons + seasonsQuantity)
+
+        _mint(address(this), id, amount, "");
+
         if (tokensHeldBalances[id] == 0) { // if new token
             tokensHeld.push(id); //TODO ensure removed upon sale
 	        tokensHeldSize = tokensHeld.length;  //TEST should += 1 //TODO ensure removed upon sale
         }
         tokensHeldBalances[id] += amount;
-        _mint(address(this), id, amount, "");
-
     }
 
-    function mintTokenBatch(uint256 ids, uint16 seasons, uint256 amounts) external onlyOwner {
-        // Overriding default _mintBatch to avoid a superfluous loop
-        _mintBatch(address(this), ids, amounts, "", seasons);
-    }
 
-    function _mintBatch(address to, uint256[] memory ids, uint256[] memory amounts, bytes memory data, uint16 season) internal override {
-        require(to != address(0), "ERC1155: mint to the zero address");
-        require(ids.length == amounts.length, "ERC1155: ids and amounts length mismatch");
-
-        address operator = _msgSender();
-
-        _beforeTokenTransfer(operator, address(0), to, ids, amounts, data);
-
+    function mintTokenBatch(uint256[] memory ids, uint16 season, uint256[] memory amounts) external onlyOwner {
+        // Can only mint tokens for one particular season
+        _mintBatch(address(this), ids, amounts, "");
         for (uint i = 0; i < ids.length; i++) {
             require(season != 0, "Season cannot be 0"); // tokenSeason uses 0 value to confirm token inexistence
             if (tokenSeason[ids[i]] != 0) {
@@ -96,44 +88,15 @@ contract Token is ERC1155, Ownable {
             } else {
                 tokenSeason[ids[i]] = season; // if token doesn't exist, add it and its season
             }
+            //TODO If I decide to use it: add to seasonTokens (+ seasons + seasonsQuantity)
             if (tokensHeldBalances[ids[i]] == 0) { // if new token
-            tokensHeld.push(ids[i]); //TODO ensure removed upon sale
-	        tokensHeldSize = tokensHeld.length;  //TEST should += 1 //TODO ensure removed upon sale
-        }
-            tokensHeldBalances[ids[i]] += amounts[i];
-            _balances[ids[i]][to] += amounts[i];
-        }
-
-        emit TransferBatch(operator, address(0), to, ids, amounts);
-
-        _doSafeBatchTransferAcceptanceCheck(operator, address(0), to, ids, amounts, data);
-    }
-
-    // Mapping from token ID to account balances
-    mapping (uint256 => mapping(address => uint256)) private _balances;
-
-    function _doSafeBatchTransferAcceptanceCheck(
-        address operator,
-        address from,
-        address to,
-        uint256[] memory ids,
-        uint256[] memory amounts,
-        bytes memory data
-    )
-        private override
-    {
-        if (to.isContract()) {
-            try IERC1155Receiver(to).onERC1155BatchReceived(operator, from, ids, amounts, data) returns (bytes4 response) {
-                if (response != IERC1155Receiver(to).onERC1155BatchReceived.selector) {
-                    revert("ERC1155: ERC1155Receiver rejected tokens");
-                }
-            } catch Error(string memory reason) {
-                revert(reason);
-            } catch {
-                revert("ERC1155: transfer to non ERC1155Receiver implementer");
+                tokensHeld.push(ids[i]); //TODO ensure removed upon sale
+                tokensHeldSize = tokensHeld.length;  //TEST should += 1 //TODO ensure removed upon sale
             }
+            tokensHeldBalances[ids[i]] += amounts[i];
         }
     }
+
 
 
 
