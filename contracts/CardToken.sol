@@ -20,6 +20,16 @@ contract CardToken is ERC1155, Ownable {
 
     // uint256[] tokens; // array of each existing tokenId //NOTE if I determine I need this, add to funcs necessary functionality
 
+    // Single marketplace variables
+    uint256[] public cardsForSingleSale; // all tokenIds for single sale
+    uint256 public cardsForSingleSaleSize; // size of cardsForSingleSale
+    mapping(uint256 => uint256) public cardsForSingleSaleBalances; // tokenId => balance (amount for single sale)
+    mapping(uint256 => uint256) public cardsForSingleSalePrices; // tokenId => price
+    mapping(uint16 => uint256) private defaultSeasonPrices; // season => price
+
+
+
+
     constructor(string memory uri) ERC1155(uri) {}
 
 
@@ -70,13 +80,110 @@ contract CardToken is ERC1155, Ownable {
         }
     }
 
-
-
-
     // Withdraw ether from contract.
     function withdraw() external onlyOwner {
         require(address(this).balance > 0, "Balance must be positive");
         (bool success, ) = msg.sender.call{value: address(this).balance}("");
         require(success == true, "Failed to withdraw ether");
     }
+
+
+    /*
+        Single marketplace functionality
+    */
+    
+    // Set wei price for tokens of a particular season
+    function setSeasonPrice(uint16 season, uint256 price) external onlyOwner {
+        defaultSeasonPrices[season] = price;
+    }
+
+    // Set wei price for a particular token (prioritised over tierPrice). Set price as 0 to reset and use season price.
+    function setTokenPrice(uint256 id, uint256 price) external onlyOwner {
+        cardsForSingleSalePrices[id] = price;
+    }
+
+    function setForSingleSale(uint256 id, uint256 amount) external onlyOwner {
+        require(amount > 0, "Must specify an amount of at least 1");
+        require(_tokenExists(id), "Cannot set inexistent token for sale");
+        require(
+            (defaultSeasonPrices[tokenSeason[id]] != 0) ||
+                (cardsForSingleSalePrices[id] != 0),
+            "Card or card's season must have a price set"
+        );
+        require(tokensHeldBalances[id] >= amount);
+
+        // Removing from tokensHeld
+        tokensHeldBalances[id] -= amount;
+        if (tokensHeldBalances[id] < 1) {
+            tokensHeld.pop(id);
+            tokensHeldSize = tokensHeld.length;
+        }
+
+        // Adding to cardsForSingleSale
+        if (cardsForSingleSaleBalances[id] == 0) {
+            cardsForSingleSale.push(id);
+            cardsForSingleSaleSize = cardsForSingleSale.length;
+        }
+        cardsForSingleSaleBalances[id] += amount;
+    }
+
+    function buySingleToken(uint256 id) public payable {
+        require(cardsForSingleSaleBalances[id] > 0, "Token is not for sale");
+        uint256 price;
+        if (cardsForSingleSalePrices[id] != 0) {
+            price = cardsForSingleSalePrices[id];
+        } else {
+            price = defaultSeasonPrices[tokenSeason[id]];
+        }
+        require(msg.value == price, "Ether sent does not match price");
+
+        // Removing from cardsForSingleSale
+        cardsForSingleSaleBalances[id] -= 1;
+        if (cardsForSingleSaleBalances[id] == 0) {
+            cardsForSingleSale.pop(id);
+            cardsForSingleSaleSize = cardsForSingleSale.length;
+        }
+
+        safeTransferFrom(address(this), msg.sender, id, 1, "");
+    }
+
+    function removeFromSingleSale(uint256 id, uint256 amount)
+        external
+        onlyOwner
+    {
+        require(amount > 0, "Must specify an amount of at least 1");
+        require(cardsForSingleSaleBalances[id] > 0, "Token is not for sale");
+        require(
+            cardsForSingleSaleBalances[id] >= amount,
+            "Amount specified exceeds token set for sale"
+        );
+
+        // Removing from cardsForSingleSale
+        cardsForSingleSaleBalances[id] -= amount;
+        if (cardsForSingleSaleBalances[id] == 0) {
+            cardsForSingleSale.pop(id);
+            cardsForSingleSaleSize = cardsForSingleSale.length;
+        }
+
+        // Adding back to tokensHeld
+        if (tokensHeldBalances[id] == 0) {
+            // if new token
+            tokensHeld.push(id);
+            tokensHeldSize = tokensHeld.length;
+        }
+        tokensHeldBalances[id] += amount;
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
 }
