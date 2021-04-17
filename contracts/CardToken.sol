@@ -5,59 +5,61 @@ pragma solidity 0.8.3;
 import "hardhat/console.sol";
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-// import "./SingleMarketplace.sol";
-// import "./PackMarketplace.sol";
+import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 contract CardToken is ERC1155, Ownable {
+
+    using EnumerableSet for EnumerableSet.UintSet;
 
     // Data for seasons
     mapping(uint256 => uint16) public tokenSeason; // id => season
 //NOTE ensure each is updated as needed
-    // Data for enumeration of held (including for sale) tokens
-    uint256[] tokensHeld; // all tokenIds this contract holds that have not been set for sale
-    uint256 tokensHeldSize; // size of tokensHeld (i.e. number of unique tokens contract holds not for sale)
+
+    // Held tokens variables (not for sale)
+    EnumerableSet.UintSet private _tokensHeld; // all tokenIds this contract holds that have not been set for sale
     mapping(uint256 => uint256) public tokensHeldBalances; // tokenid => balances (amount held not for sale)
 
     // uint256[] tokens; // array of each existing tokenId //NOTE if I determine I need this, add to funcs necessary functionality
 
     // Single marketplace variables
-    uint256[] public cardsForSingleSale; // all tokenIds for single sale
-    uint256 public cardsForSingleSaleSize; // size of cardsForSingleSale
-    mapping(uint256 => uint256) public cardsForSingleSaleBalances; // tokenId => balance (amount for single sale)
-    mapping(uint256 => uint256) public cardsForSingleSalePrices; // tokenId => price
-    mapping(uint16 => uint256) private defaultSeasonPrices; // season => price
+    EnumerableSet.UintSet private _cardsForSingleSale; // all tokenIds for single sale
+    uint256 private _cardsForSingleSaleSize; // size of cardsForSingleSale
+    mapping(uint256 => uint256) public cardsForSingleSaleBalances; // id => balance (amount for single sale)
+    mapping(uint256 => uint256) public cardsForSingleSalePrices; // id => price
+    mapping(uint16 => uint256) public defaultSeasonPrices; // season => price
 
 
 
 
     constructor(string memory uri) ERC1155(uri) {}
 
-
+    function getTokensHeldByIndex(uint256 index) public view returns(uint256) {
+        return EnumerableSet.at(_tokensHeld, index);
+    }
+    function getTokensHeldSize() public view returns(uint256) {
+        return EnumerableSet.length(_tokensHeld);
+    }
 
     function getSeasonOfTokenId(uint256 tokenId) public view returns(uint16) {
         uint16 season = tokenSeason[tokenId]; //NOTE should auto revert if out of bounds
         return season;
     }
 
-
     function _tokenExists(uint256 tokenId) private view returns(bool) {
         return tokenSeason[tokenId] != 0; // tokenSeason confirms inexistence if value is 0
     }
 
-
-
     // Mint a particular token
     function mintToken(uint256 id, uint16 season, uint256 amount) external onlyOwner {
         require(season != 0, "Season cannot be 0"); // tokenSeason uses 0 value to confirm token inexistence
-        if (tokenSeason[id] != 0) {
+        if (tokenSeason[id] != 0) { //TEST that all minted tokens have season
             require(tokenSeason[id] == season, "Existing id matches with a different season"); // mismatching id-season
         } else {
             tokenSeason[id] = season; // if token doesn't exist, add it and its season
         }
         _mint(address(this), id, amount, "");
         if (tokensHeldBalances[id] == 0) { // if new token
-            tokensHeld.push(id);
-	        tokensHeldSize = tokensHeld.length;  //TEST should += 1
+            EnumerableSet.add(_tokensHeld, id);  //TEST should += 1
         }
         tokensHeldBalances[id] += amount;
     }
@@ -73,8 +75,7 @@ contract CardToken is ERC1155, Ownable {
                 tokenSeason[ids[i]] = season; // if token doesn't exist, add it and its season
             }
             if (tokensHeldBalances[ids[i]] == 0) { // if new token
-                tokensHeld.push(ids[i]); //TODO ensure removed upon setForSale
-                tokensHeldSize = tokensHeld.length;  //TEST should += 1 //TODO ensure removed upon sale
+                EnumerableSet.add(_tokensHeld, ids[i]); //TODO ensure removed upon setForSale
             }
             tokensHeldBalances[ids[i]] += amounts[i];
         }
@@ -91,7 +92,15 @@ contract CardToken is ERC1155, Ownable {
     /*
         Single marketplace functionality
     */
-    
+
+    // For enumeration of cards for single sale
+    function getCardsForSingleSaleByIndex(uint256 index) public view returns(uint256) {
+        return EnumerableSet.at(_cardsForSingleSale, index);
+    }
+    function getCardsForSingleSaleSize() public view returns(uint256) {
+        return EnumerableSet.length(_cardsForSingleSale);
+    }
+
     // Set wei price for tokens of a particular season
     function setSeasonPrice(uint16 season, uint256 price) external onlyOwner {
         defaultSeasonPrices[season] = price;
@@ -115,14 +124,12 @@ contract CardToken is ERC1155, Ownable {
         // Removing from tokensHeld
         tokensHeldBalances[id] -= amount;
         if (tokensHeldBalances[id] < 1) {
-            tokensHeld.pop(id);
-            tokensHeldSize = tokensHeld.length;
+            EnumerableSet.remove(_tokensHeld, id);
         }
 
         // Adding to cardsForSingleSale
         if (cardsForSingleSaleBalances[id] == 0) {
-            cardsForSingleSale.push(id);
-            cardsForSingleSaleSize = cardsForSingleSale.length;
+            EnumerableSet.add(_cardsForSingleSale, id);
         }
         cardsForSingleSaleBalances[id] += amount;
     }
@@ -140,8 +147,7 @@ contract CardToken is ERC1155, Ownable {
         // Removing from cardsForSingleSale
         cardsForSingleSaleBalances[id] -= 1;
         if (cardsForSingleSaleBalances[id] == 0) {
-            cardsForSingleSale.pop(id);
-            cardsForSingleSaleSize = cardsForSingleSale.length;
+            EnumerableSet.remove(_cardsForSingleSale, id);
         }
 
         safeTransferFrom(address(this), msg.sender, id, 1, "");
@@ -161,15 +167,12 @@ contract CardToken is ERC1155, Ownable {
         // Removing from cardsForSingleSale
         cardsForSingleSaleBalances[id] -= amount;
         if (cardsForSingleSaleBalances[id] == 0) {
-            cardsForSingleSale.pop(id);
-            cardsForSingleSaleSize = cardsForSingleSale.length;
+            EnumerableSet.remove(_cardsForSingleSale, id);
         }
 
         // Adding back to tokensHeld
-        if (tokensHeldBalances[id] == 0) {
-            // if new token
-            tokensHeld.push(id);
-            tokensHeldSize = tokensHeld.length;
+        if (tokensHeldBalances[id] == 0) { // if new token
+            EnumerableSet.add(_tokensHeld, id);
         }
         tokensHeldBalances[id] += amount;
     }
