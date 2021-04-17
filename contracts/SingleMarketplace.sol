@@ -21,7 +21,7 @@ contract SingleMarketplace is Ownable {
     }
 
     // Set wei price for tokens of a particular season
-    function setTierPrice(uint16 season, uint256 price) external onlyOwner {
+    function setSeasonPrice(uint16 season, uint256 price) external onlyOwner {
         defaultSeasonPrices[season] = price;
     }
 
@@ -34,18 +34,10 @@ contract SingleMarketplace is Ownable {
         require(amount > 0, "Must specify an amount of at least 1");
         require(_tokenExists(id), "Cannot set inexistent token for sale");
         require(
-            defaultSeasonPrices[tokenSeason[id]],
-            "Card's season must have a price set"
+            (defaultSeasonPrices[tokenSeason[id]] != 0) || (cardsForSingleSalePrices[id] != 0),
+            "Card or card's season must have a price set"
         );
         require(tokensHeldBalances[id] >= amount);
-
-// if cardPrice != 0 {
-    set price as season price
-}
-
-        // Setting price
-        uint256 memory seasonPrice = defaultSeasonPrices[tokenSeason[id]];
-        setTokenPrice(id, seasonPrice);
 
         // Removing from tokensHeld
         tokensHeldBalances[id] -= amount;
@@ -62,30 +54,24 @@ contract SingleMarketplace is Ownable {
         cardsForSingleSaleBalances[id] += amount;
     }
 
-    function buySingleToken(uint256 id, uint256 amount) public payable {
-        require(amount > 0, "Must specify an amount of at least 1");
+    function buySingleToken(uint256 id) public payable {
         require(cardsForSingleSaleBalances[id] > 0, "Token is not for sale");
-        require(cardsForSingleSaleBalances[id] >= amount, "Amount specified exceeds token set for sale");
-        uint memory totalPrice;
+        uint memory price;
         if (cardsForSingleSalePrices[id] != 0) {
-            totalPrice = cardsforSingleSalePrices[id] * amount;
+            price = cardsforSingleSalePrices[id];
         } else {
-            totalPrice = defaultSeasonPrices[tokenSeason[id]];
+            price = defaultSeasonPrices[tokenSeason[id]];
         }
-        require(msg.value == totalPrice, "Ether sent does not match price");
+        require(msg.value == price, "Ether sent does not match price");
 
         // Removing from cardsForSingleSale
-        cardsForSingleSaleBalances[id] -= amount;
+        cardsForSingleSaleBalances[id] -= 1;
         if (cardsForSingleSaleBalances[id] == 0) {
             cardsForSingleSale.pop(id);
             cardsForSingleSaleSize = cardsForSingleSale.length;
-            cardsForSingleSalePrices[id] = 0;
         }
 
-        safeTransferFrom(address(this), msg.sender, id, amount, "");
-
-        //TODO consider whether amount should be limited, and if so how many
-
+        safeTransferFrom(address(this), msg.sender, id, 1, "");
     }
 
     function removeFromSingleSale(uint256 id, uint256 amount)
@@ -101,7 +87,6 @@ contract SingleMarketplace is Ownable {
         if (cardsForSingleSaleBalances[id] == 0) {
             cardsForSingleSale.pop(id);
             cardsForSingleSaleSize = cardsForSingleSale.length;
-            cardsForSingleSalePrices[id] = 0;
         }
 
         // Adding back to tokensHeld
