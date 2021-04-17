@@ -4,28 +4,21 @@ pragma solidity 0.8.3;
 
 import "hardhat/console.sol";
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
-import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 // import "./SingleMarketplace.sol";
 // import "./PackMarketplace.sol";
 
-contract Token is ERC1155, Ownable {
-    using Address for address;
+contract CardToken is ERC1155, Ownable {
 
-//NOTE ensure each is updated as needed
     // Data for seasons
     mapping(uint256 => uint16) public tokenSeason; // id => season
 //NOTE ensure each is updated as needed
     // Data for enumeration of held (including for sale) tokens
-    uint256[] tokensHeld; // array containing each token tokenId this contract holds that has not been set for sale  //TODO ensure if held tokenId's balance is 0 => remove from arr
+    uint256[] tokensHeld; // all tokenIds this contract holds that have not been set for sale
     uint256 tokensHeldSize; // size of tokensHeld (i.e. number of unique tokens contract holds not for sale)
-    mapping(uint256 => uint256) public tokensHeldBalances; // held not-on-sale tokenid => balances
+    mapping(uint256 => uint256) public tokensHeldBalances; // tokenid => balances (amount held not for sale)
 
     // uint256[] tokens; // array of each existing tokenId //NOTE if I determine I need this, add to funcs necessary functionality
-
-
-
 
     constructor(string memory uri) ERC1155(uri) {}
 
@@ -43,7 +36,7 @@ contract Token is ERC1155, Ownable {
 
 
 
-
+    // Mint a particular token
     function mintToken(uint256 id, uint16 season, uint256 amount) external onlyOwner {
         require(season != 0, "Season cannot be 0"); // tokenSeason uses 0 value to confirm token inexistence
         if (tokenSeason[id] != 0) {
@@ -53,15 +46,14 @@ contract Token is ERC1155, Ownable {
         }
         _mint(address(this), id, amount, "");
         if (tokensHeldBalances[id] == 0) { // if new token
-            tokensHeld.push(id); //TODO ensure removed upon sale
-	        tokensHeldSize = tokensHeld.length;  //TEST should += 1 //TODO ensure removed upon sale
+            tokensHeld.push(id);
+	        tokensHeldSize = tokensHeld.length;  //TEST should += 1
         }
         tokensHeldBalances[id] += amount;
     }
 
-
+    // Mint multiple tokens. Can only mint tokens for one season at a time.
     function mintTokenBatch(uint256[] memory ids, uint16 season, uint256[] memory amounts) external onlyOwner {
-        // Can only mint tokens for one particular season
         _mintBatch(address(this), ids, amounts, "");
         for (uint i = 0; i < ids.length; i++) {
             require(season != 0, "Season cannot be 0"); // tokenSeason uses 0 value to confirm token inexistence
@@ -71,7 +63,7 @@ contract Token is ERC1155, Ownable {
                 tokenSeason[ids[i]] = season; // if token doesn't exist, add it and its season
             }
             if (tokensHeldBalances[ids[i]] == 0) { // if new token
-                tokensHeld.push(ids[i]); //TODO ensure removed upon sale
+                tokensHeld.push(ids[i]); //TODO ensure removed upon setForSale
                 tokensHeldSize = tokensHeld.length;  //TEST should += 1 //TODO ensure removed upon sale
             }
             tokensHeldBalances[ids[i]] += amounts[i];
@@ -81,7 +73,7 @@ contract Token is ERC1155, Ownable {
 
 
 
-
+    // Withdraw ether from contract.
     function withdraw() external onlyOwner {
         require(address(this).balance > 0, "Balance must be positive");
         (bool success, ) = msg.sender.call{value: address(this).balance}("");
