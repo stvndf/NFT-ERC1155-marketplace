@@ -4,80 +4,132 @@ pragma solidity 0.8.3;
 
 import "hardhat/console.sol";
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
+import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
+// import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Receiver.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
-contract CardToken is ERC1155, Ownable {
+contract CardToken is ERC1155, ERC1155Holder, Ownable {
+    // contract CardToken is ERC1155, ERC1155Receiver, Ownable {
 
     using EnumerableSet for EnumerableSet.UintSet;
 
     // Data for seasons
-    mapping(uint256 => uint16) public tokenSeason; // id => season
-//NOTE ensure each is updated as needed
+    mapping(uint256 => uint16) private _tokenSeason; // id => season
+    //NOTE ensure each is updated as needed
 
     // Held tokens variables (not for sale)
-    EnumerableSet.UintSet private _tokensHeld; // all tokenIds this contract holds that have not been set for sale
-    mapping(uint256 => uint256) public tokensHeldBalances; // tokenid => balances (amount held not for sale)
+    EnumerableSet.UintSet private _tokensHeld; // all ids this contract holds that have not been set for sale
+    mapping(uint256 => uint256) private _tokensHeldBalances; // id => balance (amount held not for sale)
 
     // uint256[] tokens; // array of each existing tokenId //NOTE if I determine I need this, add to funcs necessary functionality
 
     // Single marketplace variables
     EnumerableSet.UintSet private _cardsForSingleSale; // all tokenIds for single sale
-    uint256 private _cardsForSingleSaleSize; // size of cardsForSingleSale
     mapping(uint256 => uint256) public cardsForSingleSaleBalances; // id => balance (amount for single sale)
     mapping(uint256 => uint256) public cardsForSingleSalePrices; // id => price
     mapping(uint16 => uint256) public defaultSeasonPrices; // season => price
 
-
-
-
     constructor(string memory uri) ERC1155(uri) {}
 
-    function getTokensHeldByIndex(uint256 index) public view returns(uint256) {
-        return EnumerableSet.at(_tokensHeld, index);
-    }
-    function getTokensHeldSize() public view returns(uint256) {
-        return EnumerableSet.length(_tokensHeld);
-    }
-
-    function getSeasonOfTokenId(uint256 tokenId) public view returns(uint16) {
-        uint16 season = tokenSeason[tokenId]; //NOTE should auto revert if out of bounds
-        return season;
+    function supportsInterface(bytes4 interfaceId)
+        public
+        view
+        virtual
+        override(ERC1155, ERC1155Receiver)
+        returns (bool)
+    {
+        return super.supportsInterface(interfaceId);
     }
 
-    function _tokenExists(uint256 tokenId) private view returns(bool) {
-        return tokenSeason[tokenId] != 0; // tokenSeason confirms inexistence if value is 0
+    function _tokenExists(uint256 id) private view returns (bool) {
+        return _tokenSeason[id] != 0; // tokenSeason confirms inexistence if value is 0
+    }
+
+    /*
+        Getters
+    */
+
+    // Obtain seaon token belongs to
+    function getSeasonOfTokenId(uint256 id) public view returns (uint16) {
+        require(_tokenExists(id), "Token does not exist");
+        return _tokenSeason[id];
+    }
+
+    // Enumeration of held tokens
+    function getTokenHeldByIndex(uint256 index) public view returns (uint256) {
+        return _tokensHeld.at(index);
+    }
+
+    function getTokensHeldSize() public view returns (uint256) {
+        return _tokensHeld.length();
+    }
+
+    function getBalanceOfTokenId(uint256 id) public view returns (uint256) {
+        return _tokensHeldBalances[id];
+    }
+
+    // Enumeration of tokens for single sale
+    function getCardForSingleSaleByIndex(uint256 index)
+        public
+        view
+        returns (uint256)
+    {
+        return _cardsForSingleSale.at(index);
+    }
+
+    function getCardsForSingleSaleSize() public view returns (uint256) {
+        return _cardsForSingleSale.length();
     }
 
     // Mint a particular token
-    function mintToken(uint256 id, uint16 season, uint256 amount) external onlyOwner {
+    function mintToken(
+        uint256 id,
+        uint16 season,
+        uint256 amount
+    ) external onlyOwner {
         require(season != 0, "Season cannot be 0"); // tokenSeason uses 0 value to confirm token inexistence
-        if (tokenSeason[id] != 0) { //TEST that all minted tokens have season
-            require(tokenSeason[id] == season, "Existing id matches with a different season"); // mismatching id-season
+        require(amount > 0, "Must mint at least 1 of the token");
+        if (_tokenSeason[id] != 0) {
+            //TEST that all minted tokens have season
+            require(
+                _tokenSeason[id] == season,
+                "Existing id matches with a different season"
+            ); // mismatching id-season
         } else {
-            tokenSeason[id] = season; // if token doesn't exist, add it and its season
+            _tokenSeason[id] = season; // if token doesn't exist, add it and its season
         }
         _mint(address(this), id, amount, "");
-        if (tokensHeldBalances[id] == 0) { // if new token
-            EnumerableSet.add(_tokensHeld, id);  //TEST should += 1
+        if (_tokensHeldBalances[id] == 0) {
+            // if new token
+            _tokensHeld.add(id); //TEST should += 1
         }
-        tokensHeldBalances[id] += amount;
+        _tokensHeldBalances[id] += amount;
     }
 
     // Mint multiple tokens. Can only mint tokens for one season at a time.
-    function mintTokenBatch(uint256[] memory ids, uint16 season, uint256[] memory amounts) external onlyOwner {
+    function mintTokenBatch(
+        uint256[] memory ids,
+        uint16 season,
+        uint256[] memory amounts
+    ) external onlyOwner {
         _mintBatch(address(this), ids, amounts, "");
-        for (uint i = 0; i < ids.length; i++) {
+        for (uint256 i = 0; i < ids.length; i++) {
             require(season != 0, "Season cannot be 0"); // tokenSeason uses 0 value to confirm token inexistence
-            if (tokenSeason[ids[i]] != 0) {
-                require(tokenSeason[ids[i]] == season, "Existing id matches with a different season"); // mismatching id-season
+            require(amounts[i] > 0, "Must mint at least 1 of the token");
+            if (_tokenSeason[ids[i]] != 0) {
+                require(
+                    _tokenSeason[ids[i]] == season,
+                    "Existing id matches with a different season"
+                ); // mismatching id-season
             } else {
-                tokenSeason[ids[i]] = season; // if token doesn't exist, add it and its season
+                _tokenSeason[ids[i]] = season; // if token doesn't exist, add it and its season
             }
-            if (tokensHeldBalances[ids[i]] == 0) { // if new token
-                EnumerableSet.add(_tokensHeld, ids[i]); //TODO ensure removed upon setForSale
+            if (_tokensHeldBalances[ids[i]] == 0) {
+                // if new token
+                _tokensHeld.add(ids[i]); //TODO ensure removed upon setForSale
             }
-            tokensHeldBalances[ids[i]] += amounts[i];
+            _tokensHeldBalances[ids[i]] += amounts[i];
         }
     }
 
@@ -88,18 +140,9 @@ contract CardToken is ERC1155, Ownable {
         require(success == true, "Failed to withdraw ether");
     }
 
-
     /*
         Single marketplace functionality
     */
-
-    // For enumeration of cards for single sale
-    function getCardsForSingleSaleByIndex(uint256 index) public view returns(uint256) {
-        return EnumerableSet.at(_cardsForSingleSale, index);
-    }
-    function getCardsForSingleSaleSize() public view returns(uint256) {
-        return EnumerableSet.length(_cardsForSingleSale);
-    }
 
     // Set wei price for tokens of a particular season
     function setSeasonPrice(uint16 season, uint256 price) external onlyOwner {
@@ -115,21 +158,21 @@ contract CardToken is ERC1155, Ownable {
         require(amount > 0, "Must specify an amount of at least 1");
         require(_tokenExists(id), "Cannot set inexistent token for sale");
         require(
-            (defaultSeasonPrices[tokenSeason[id]] != 0) ||
+            (defaultSeasonPrices[_tokenSeason[id]] != 0) ||
                 (cardsForSingleSalePrices[id] != 0),
             "Card or card's season must have a price set"
         );
-        require(tokensHeldBalances[id] >= amount);
+        require(_tokensHeldBalances[id] >= amount);
 
         // Removing from tokensHeld
-        tokensHeldBalances[id] -= amount;
-        if (tokensHeldBalances[id] < 1) {
-            EnumerableSet.remove(_tokensHeld, id);
+        _tokensHeldBalances[id] -= amount;
+        if (_tokensHeldBalances[id] < 1) {
+            _tokensHeld.remove(id);
         }
 
         // Adding to cardsForSingleSale
         if (cardsForSingleSaleBalances[id] == 0) {
-            EnumerableSet.add(_cardsForSingleSale, id);
+            _cardsForSingleSale.add(id);
         }
         cardsForSingleSaleBalances[id] += amount;
     }
@@ -140,14 +183,14 @@ contract CardToken is ERC1155, Ownable {
         if (cardsForSingleSalePrices[id] != 0) {
             price = cardsForSingleSalePrices[id];
         } else {
-            price = defaultSeasonPrices[tokenSeason[id]];
+            price = defaultSeasonPrices[_tokenSeason[id]];
         }
         require(msg.value == price, "Ether sent does not match price");
 
         // Removing from cardsForSingleSale
         cardsForSingleSaleBalances[id] -= 1;
         if (cardsForSingleSaleBalances[id] == 0) {
-            EnumerableSet.remove(_cardsForSingleSale, id);
+            _cardsForSingleSale.remove(id);
         }
 
         safeTransferFrom(address(this), msg.sender, id, 1, "");
@@ -167,26 +210,14 @@ contract CardToken is ERC1155, Ownable {
         // Removing from cardsForSingleSale
         cardsForSingleSaleBalances[id] -= amount;
         if (cardsForSingleSaleBalances[id] == 0) {
-            EnumerableSet.remove(_cardsForSingleSale, id);
+            _cardsForSingleSale.remove(id);
         }
 
         // Adding back to tokensHeld
-        if (tokensHeldBalances[id] == 0) { // if new token
-            EnumerableSet.add(_tokensHeld, id);
+        if (_tokensHeldBalances[id] == 0) {
+            // if new token
+            _tokensHeld.add(id);
         }
-        tokensHeldBalances[id] += amount;
+        _tokensHeldBalances[id] += amount;
     }
-
-
-
-
-
-
-
-
-
-
-
-
-
 }
