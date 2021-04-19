@@ -22,8 +22,6 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
     EnumerableSet.UintSet private _tokensHeld; // all ids this contract holds that have not been set for sale
     mapping(uint256 => uint256) private _tokensHeldBalances; // id => balance (amount held not for sale)
 
-    // uint256[] tokens; // array of each existing tokenId //NOTE if I determine I need this, add to funcs necessary functionality
-
     // Single marketplace variables
     EnumerableSet.UintSet private _cardsForSingleSale; // all tokenIds for single sale
     mapping(uint256 => uint256) public cardsForSingleSaleBalances; // id => balance (amount for single sale)
@@ -65,7 +63,7 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
         return _tokensHeld.length();
     }
 
-    function getBalanceOfTokenId(uint256 id) public view returns (uint256) {
+    function getHeldBalanceOfTokenId(uint256 id) public view returns (uint256) {
         return _tokensHeldBalances[id];
     }
 
@@ -99,7 +97,9 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
         } else {
             _tokenSeason[id] = season; // if token doesn't exist, add it and its season
         }
+
         _mint(address(this), id, amount, "");
+
         if (_tokensHeldBalances[id] == 0) {
             // if new token
             _tokensHeld.add(id); //TEST should += 1
@@ -113,9 +113,9 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
         uint16 season,
         uint256[] memory amounts
     ) external onlyOwner {
+        require(season != 0, "Season cannot be 0"); // tokenSeason uses 0 value to confirm token inexistence
         _mintBatch(address(this), ids, amounts, "");
         for (uint256 i = 0; i < ids.length; i++) {
-            require(season != 0, "Season cannot be 0"); // tokenSeason uses 0 value to confirm token inexistence
             require(amounts[i] > 0, "Must mint at least 1 of the token");
             if (_tokenSeason[ids[i]] != 0) {
                 require(
@@ -146,6 +146,7 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
 
     // Set wei price for tokens of a particular season
     function setSeasonPrice(uint16 season, uint256 price) external onlyOwner {
+        require(season != 0, "Cannot set price for season 0");
         defaultSeasonPrices[season] = price;
     }
 
@@ -156,13 +157,13 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
 
     function setForSingleSale(uint256 id, uint256 amount) external onlyOwner {
         require(amount > 0, "Must specify an amount of at least 1");
-        require(_tokenExists(id), "Cannot set inexistent token for sale");
+        require(_tokenExists(id), "Token does not exist");
         require(
             (defaultSeasonPrices[_tokenSeason[id]] != 0) ||
                 (cardsForSingleSalePrices[id] != 0),
             "Card or card's season must have a price set"
         );
-        require(_tokensHeldBalances[id] >= amount);
+        require(amount <= _tokensHeldBalances[id], "Specified amount exceeds held amount available");
 
         // Removing from tokensHeld
         _tokensHeldBalances[id] -= amount;
@@ -178,6 +179,8 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
     }
 
     function buySingleToken(uint256 id) public payable {
+        uint256 fromBalance = _balances[id][address(this)];
+        require(fromBalance >= 1, "ERC1155: insufficient balance for transfer");
         require(cardsForSingleSaleBalances[id] > 0, "Token is not for sale");
         uint256 price;
         if (cardsForSingleSalePrices[id] != 0) {
@@ -193,19 +196,24 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
             _cardsForSingleSale.remove(id);
         }
 
-        safeTransferFrom(address(this), msg.sender, id, 1, "");
+        // Transfer
+        _balances[id][address(this)] = fromBalance - 1;
+        _balances[id][msg.sender] += 1;
+        emit TransferSingle(msg.sender, address(this), msg.sender, id, 1);
     }
 
     function removeFromSingleSale(uint256 id, uint256 amount)
         external
         onlyOwner
     {
+        require(_tokenExists(id), "Token does not exist");
         require(amount > 0, "Must specify an amount of at least 1");
         require(cardsForSingleSaleBalances[id] > 0, "Token is not for sale");
         require(
             cardsForSingleSaleBalances[id] >= amount,
             "Amount specified exceeds token set for sale"
         );
+
 
         // Removing from cardsForSingleSale
         cardsForSingleSaleBalances[id] -= amount;
