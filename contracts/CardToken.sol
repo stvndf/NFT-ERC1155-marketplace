@@ -5,27 +5,24 @@ pragma solidity 0.8.3;
 import "hardhat/console.sol";
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
-// import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Receiver.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 contract CardToken is ERC1155, ERC1155Holder, Ownable {
-    // contract CardToken is ERC1155, ERC1155Receiver, Ownable {
 
     using EnumerableSet for EnumerableSet.UintSet;
 
     // Data for seasons
     mapping(uint256 => uint16) private _tokenSeason; // id => season
-    //NOTE ensure each is updated as needed
 
     // Held tokens variables (not for sale)
     EnumerableSet.UintSet private _tokensHeld; // all ids this contract holds that have not been set for sale
     mapping(uint256 => uint256) private _tokensHeldBalances; // id => balance (amount held not for sale)
 
     // Single marketplace variables
-    EnumerableSet.UintSet private _cardsForSingleSale; // all tokenIds for single sale
-    mapping(uint256 => uint256) public cardsForSingleSaleBalances; // id => balance (amount for single sale)
-    mapping(uint256 => uint256) public cardsForSingleSalePrices; // id => price
+    EnumerableSet.UintSet private _tokensForSingleSale; // all ids for single sale
+    mapping(uint256 => uint256) public tokensForSingleSaleBalances; // id => balance (amount for single sale)
+    mapping(uint256 => uint256) public tokensForSingleSalePrices; // id => price
     mapping(uint16 => uint256) public defaultSeasonPrices; // season => price
 
     constructor(string memory uri) ERC1155(uri) {}
@@ -43,6 +40,7 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
     function _tokenExists(uint256 id) private view returns (bool) {
         return _tokenSeason[id] != 0; // tokenSeason confirms inexistence if value is 0
     }
+
 
     /*
         Getters
@@ -68,16 +66,16 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
     }
 
     // Enumeration of tokens for single sale
-    function getCardForSingleSaleByIndex(uint256 index)
+    function getTokenForSingleSaleByIndex(uint256 index)
         public
         view
         returns (uint256)
     {
-        return _cardsForSingleSale.at(index);
+        return _tokensForSingleSale.at(index);
     }
 
-    function getCardsForSingleSaleSize() public view returns (uint256) {
-        return _cardsForSingleSale.length();
+    function getTokensForSingleSaleSize() public view returns (uint256) {
+        return _tokensForSingleSale.length();
     }
 
     // Mint a particular token
@@ -152,7 +150,7 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
 
     // Set wei price for a particular token (prioritised over tierPrice). Set price as 0 to reset and use season price.
     function setTokenPrice(uint256 id, uint256 price) external onlyOwner {
-        cardsForSingleSalePrices[id] = price;
+        tokensForSingleSalePrices[id] = price;
     }
 
     function setForSingleSale(uint256 id, uint256 amount) external onlyOwner {
@@ -160,7 +158,7 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
         require(_tokenExists(id), "Token does not exist");
         require(
             (defaultSeasonPrices[_tokenSeason[id]] != 0) ||
-                (cardsForSingleSalePrices[id] != 0),
+                (tokensForSingleSalePrices[id] != 0),
             "Card or card's season must have a price set"
         );
         require(amount <= _tokensHeldBalances[id], "Specified amount exceeds held amount available");
@@ -171,29 +169,29 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
             _tokensHeld.remove(id);
         }
 
-        // Adding to cardsForSingleSale
-        if (cardsForSingleSaleBalances[id] == 0) {
-            _cardsForSingleSale.add(id);
+        // Adding to tokensForSingleSale
+        if (tokensForSingleSaleBalances[id] == 0) {
+            _tokensForSingleSale.add(id);
         }
-        cardsForSingleSaleBalances[id] += amount;
+        tokensForSingleSaleBalances[id] += amount;
     }
 
     function buySingleToken(uint256 id) public payable {
         uint256 fromBalance = _balances[id][address(this)];
         require(fromBalance >= 1, "ERC1155: insufficient balance for transfer");
-        require(cardsForSingleSaleBalances[id] > 0, "Token is not for sale");
+        require(tokensForSingleSaleBalances[id] > 0, "Token is not for sale");
         uint256 price;
-        if (cardsForSingleSalePrices[id] != 0) {
-            price = cardsForSingleSalePrices[id];
+        if (tokensForSingleSalePrices[id] != 0) {
+            price = tokensForSingleSalePrices[id];
         } else {
             price = defaultSeasonPrices[_tokenSeason[id]];
         }
         require(msg.value == price, "Ether sent does not match price");
 
-        // Removing from cardsForSingleSale
-        cardsForSingleSaleBalances[id] -= 1;
-        if (cardsForSingleSaleBalances[id] == 0) {
-            _cardsForSingleSale.remove(id);
+        // Removing from tokensForSingleSale
+        tokensForSingleSaleBalances[id] -= 1;
+        if (tokensForSingleSaleBalances[id] == 0) {
+            _tokensForSingleSale.remove(id);
         }
 
         // Transfer
@@ -208,17 +206,17 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
     {
         require(_tokenExists(id), "Token does not exist");
         require(amount > 0, "Must specify an amount of at least 1");
-        require(cardsForSingleSaleBalances[id] > 0, "Token is not for sale");
+        require(tokensForSingleSaleBalances[id] > 0, "Token is not for sale");
         require(
-            cardsForSingleSaleBalances[id] >= amount,
+            tokensForSingleSaleBalances[id] >= amount,
             "Amount specified exceeds token set for sale"
         );
 
 
-        // Removing from cardsForSingleSale
-        cardsForSingleSaleBalances[id] -= amount;
-        if (cardsForSingleSaleBalances[id] == 0) {
-            _cardsForSingleSale.remove(id);
+        // Removing from tokensForSingleSale
+        tokensForSingleSaleBalances[id] -= amount;
+        if (tokensForSingleSaleBalances[id] == 0) {
+            _tokensForSingleSale.remove(id);
         }
 
         // Adding back to tokensHeld

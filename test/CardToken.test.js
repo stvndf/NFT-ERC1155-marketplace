@@ -1,6 +1,6 @@
 //| //TODO onlyOwner all funcs where appropriate
 
-//TODO \ packSale: equivalent for the two getter functions: getCardForSingleSaleByIndex, getCardsForSingleSaleSize
+//TODO \ packSale: equivalent for the two getter functions: getTokenForSingleSaleByIndex, getTokensForSingleSaleSize
 //TODO consider receiver
 
 const { web3 } = require("hardhat");
@@ -226,14 +226,14 @@ contract("CardToken", (accounts) => {
     it("setTokenPrice function", async () => {
       await contract.setTokenPrice(3, web3.utils.toWei("1"));
       assert.equal(
-        Number(await contract.cardsForSingleSalePrices(3)),
+        Number(await contract.tokensForSingleSalePrices(3)),
         web3.utils.toWei("1")
       );
 
       await contract.setTokenPrice(4, web3.utils.toWei("4"));
       await contract.setTokenPrice(4, web3.utils.toWei("40"));
       assert.equal(
-        Number(await contract.cardsForSingleSalePrices(4)),
+        Number(await contract.tokensForSingleSalePrices(4)),
         web3.utils.toWei("40")
       );
     });
@@ -262,16 +262,16 @@ contract("CardToken", (accounts) => {
         await contract.setForSingleSale(5, 1); // should succeed
 
         const tokenForSale = Number(
-          await contract.getCardForSingleSaleByIndex(0)
+          await contract.getTokenForSingleSaleByIndex(0)
         );
         assert.equal(tokenForSale, 5);
         const tokensForSaleSize = Number(
-          await contract.getCardsForSingleSaleSize()
+          await contract.getTokensForSingleSaleSize()
         );
         assert.equal(tokensForSaleSize, 1);
       });
 
-      it("Removed from (_tokensHeld & _tokensHeldBalances) and added to (_cardsForSingleSale & cardsForSingleSaleBalances) appropriately", async () => {
+      it("Removed from (_tokensHeld & _tokensHeldBalances) and added to (_tokensForSingleSale & tokensForSingleSaleBalances) appropriately", async () => {
         contract = await Contract.new(uri);
 
         await contract.mintToken(0, 1, 1);
@@ -289,19 +289,19 @@ contract("CardToken", (accounts) => {
         assert.equal(Number(await contract.getHeldBalanceOfTokenId(0)), 0);
         assert.equal(Number(await contract.getHeldBalanceOfTokenId(1)), 2);
 
-        assert.equal(Number(await contract.getCardsForSingleSaleSize()), 2);
+        assert.equal(Number(await contract.getTokensForSingleSaleSize()), 2);
         assert.equal(
           Number(
-            await contract.cardsForSingleSaleBalances(
-              Number(await contract.getCardForSingleSaleByIndex(0))
+            await contract.tokensForSingleSaleBalances(
+              Number(await contract.getTokenForSingleSaleByIndex(0))
             )
           ),
           1
         );
         assert.equal(
           Number(
-            await contract.cardsForSingleSaleBalances(
-              Number(await contract.getCardForSingleSaleByIndex(1))
+            await contract.tokensForSingleSaleBalances(
+              Number(await contract.getTokenForSingleSaleByIndex(1))
             )
           ),
           8
@@ -323,7 +323,7 @@ contract("CardToken", (accounts) => {
 
         await contract.setSeasonPrice(1, web3.utils.toWei("5"));
         await contract.setForSingleSale(0, 1);
-        assert.equal(Number(await contract.cardsForSingleSaleBalances(0)), 1);
+        assert.equal(Number(await contract.tokensForSingleSaleBalances(0)), 1);
 
         await expectRevert(
           contract.buySingleToken(0),
@@ -382,14 +382,14 @@ contract("CardToken", (accounts) => {
 
         assert.equal(Number(await contract.balanceOf(contract.address, 0)), 10);
         assert.equal(Number(await contract.getHeldBalanceOfTokenId(0)), 4);
-        assert.equal(Number(await contract.cardsForSingleSaleBalances(0)), 6);
+        assert.equal(Number(await contract.tokensForSingleSaleBalances(0)), 6);
 
         await contract.buySingleToken(0, { from: acc1, value: ethVal });
 
         assert.equal(Number(await contract.balanceOf(contract.address, 0)), 9);
         assert.equal(Number(await contract.balanceOf(acc1, 0)), 1); // new owner
         assert.equal(Number(await contract.getHeldBalanceOfTokenId(0)), 4);
-        assert.equal(Number(await contract.cardsForSingleSaleBalances(0)), 5);
+        assert.equal(Number(await contract.tokensForSingleSaleBalances(0)), 5);
       });
     });
 
@@ -408,7 +408,7 @@ contract("CardToken", (accounts) => {
         await contract.mintToken(1, 50, 1);
         await expectRevert(contract.removeFromSingleSale(1, 1), "Token is not for sale")
         await contract.removeFromSingleSale(0, 1);
-        assert.equal(Number(await contract.cardsForSingleSaleBalances(0)), 0);
+        assert.equal(Number(await contract.tokensForSingleSaleBalances(0)), 0);
       })
 
       it("Balances update correctly, getters", async () => {
@@ -424,20 +424,40 @@ contract("CardToken", (accounts) => {
         assert.equal(Number(await contract.balanceOf(contract.address, 0)), 9);
         assert.equal(Number(await contract.balanceOf(acc1, 0)), 1); // new owner
         assert.equal(Number(await contract.getHeldBalanceOfTokenId(0)), 4);
-        assert.equal(Number(await contract.cardsForSingleSaleBalances(0)), 5);
+        assert.equal(Number(await contract.tokensForSingleSaleBalances(0)), 5);
 
-        assert.equal(Number(await contract.getCardsForSingleSaleSize()), 1)
+        assert.equal(Number(await contract.getTokensForSingleSaleSize()), 1)
 
         await contract.removeFromSingleSale(0, 3);
         assert.equal(Number(await contract.balanceOf(contract.address, 0)), 9);
         assert.equal(Number(await contract.balanceOf(acc1, 0)), 1); // new owner
         assert.equal(Number(await contract.getHeldBalanceOfTokenId(0)), 7);
-        assert.equal(Number(await contract.cardsForSingleSaleBalances(0)), 2);
+        assert.equal(Number(await contract.tokensForSingleSaleBalances(0)), 2);
 
-        assert.equal(Number(await contract.getCardsForSingleSaleSize()), 1)
+        assert.equal(Number(await contract.getTokensForSingleSaleSize()), 1)
         await contract.removeFromSingleSale(0, 2); // removing remaining ones in balance
-        assert.equal(Number(await contract.getCardsForSingleSaleSize()), 0)
+        assert.equal(Number(await contract.getTokensForSingleSaleSize()), 0)
       });
+    })
+
+    it("Is enumerable", async () => {
+      await contract.mintTokenBatch([0, 1], 1, [10, 20]);
+      await contract.setSeasonPrice(1, web3.utils.toWei("1"))
+      await contract.setForSingleSale(0, 6);
+
+      const tokensHeldSize = String(await contract.getTokensHeldSize())
+      assert.equal(tokensHeldSize, "2")
+      const tokenHeldByIndex1 = String(await contract.getTokenHeldByIndex(1))
+      assert.equal(tokenHeldByIndex1, "1")
+      const heldBalanceOfToken0 = String(await contract.getHeldBalanceOfTokenId(0))
+      assert.equal(heldBalanceOfToken0, "4")
+
+      const tokensForSingleSaleSize = String(await contract.getTokensForSingleSaleSize())
+      assert.equal(tokensForSingleSaleSize, "1")
+      const tokenForSingleSaleByIndex0 = String(await contract.getTokenForSingleSaleByIndex(0))
+      assert.equal(tokenForSingleSaleByIndex0, "0")
+      const tokenForSingleSaleBalances0 = String(await contract.tokensForSingleSaleBalances(0))
+      assert.equal(tokenForSingleSaleBalances0, "6")
     })
   });
 });
