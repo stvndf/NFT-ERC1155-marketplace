@@ -25,6 +25,12 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
     mapping(uint256 => uint256) public tokensForSingleSalePrices; // id => price
     mapping(uint16 => uint256) public defaultSeasonPrices; // season => price
 
+    // Pack marketplace variables
+    EnumerableSet.UintSet private _tokensForPackSale; // all ids for pack sale
+    mapping(uint256 => uint256) public tokensForPackSaleBalances; // id => balance (amount for single sale)
+    uint256 public packPrice;
+
+
     constructor(string memory uri) ERC1155(uri) {}
 
     function supportsInterface(bytes4 interfaceId)
@@ -56,11 +62,9 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
     function getTokenHeldByIndex(uint256 index) public view returns (uint256) {
         return _tokensHeld.at(index);
     }
-
     function getTokensHeldSize() public view returns (uint256) {
         return _tokensHeld.length();
     }
-
     function getHeldBalanceOfTokenId(uint256 id) public view returns (uint256) {
         return _tokensHeldBalances[id];
     }
@@ -73,10 +77,24 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
     {
         return _tokensForSingleSale.at(index);
     }
-
     function getTokensForSingleSaleSize() public view returns (uint256) {
         return _tokensForSingleSale.length();
     }
+
+    // Enumeration of tokens in pack
+    function getTokenForPackSaleByIndex(uint256 index)
+        public
+        view
+        returns (uint256)
+    {
+        return _tokensForPackSale.at(index);
+    }
+    function getTokensForPackSaleSize() public view returns (uint256) {
+        return _tokensForPackSale.length();
+    }
+
+
+
 
     // Mint a particular token
     function mintToken(
@@ -138,6 +156,7 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
         require(success == true, "Failed to withdraw ether");
     }
 
+
     /*
         Single marketplace functionality
     */
@@ -176,30 +195,6 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
         tokensForSingleSaleBalances[id] += amount;
     }
 
-    function buySingleToken(uint256 id) public payable {
-        uint256 fromBalance = _balances[id][address(this)];
-        require(fromBalance >= 1, "ERC1155: insufficient balance for transfer");
-        require(tokensForSingleSaleBalances[id] > 0, "Token is not for sale");
-        uint256 price;
-        if (tokensForSingleSalePrices[id] != 0) {
-            price = tokensForSingleSalePrices[id];
-        } else {
-            price = defaultSeasonPrices[_tokenSeason[id]];
-        }
-        require(msg.value == price, "Ether sent does not match price");
-
-        // Removing from tokensForSingleSale
-        tokensForSingleSaleBalances[id] -= 1;
-        if (tokensForSingleSaleBalances[id] == 0) {
-            _tokensForSingleSale.remove(id);
-        }
-
-        // Transfer
-        _balances[id][address(this)] = fromBalance - 1;
-        _balances[id][msg.sender] += 1;
-        emit TransferSingle(msg.sender, address(this), msg.sender, id, 1);
-    }
-
     function removeFromSingleSale(uint256 id, uint256 amount)
         external
         onlyOwner
@@ -226,4 +221,86 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
         }
         _tokensHeldBalances[id] += amount;
     }
+
+    function buySingleToken(uint256 id) public payable {
+        uint256 fromBalance = _balances[id][address(this)];
+        require(fromBalance >= 1, "ERC1155: insufficient balance for transfer");
+        require(tokensForSingleSaleBalances[id] > 0, "Token is not for sale");
+        uint256 price;
+        if (tokensForSingleSalePrices[id] != 0) {
+            price = tokensForSingleSalePrices[id];
+        } else {
+            price = defaultSeasonPrices[_tokenSeason[id]];
+        }
+        require(msg.value == price, "Ether sent does not match price");
+
+        // Removing from tokensForSingleSale
+        tokensForSingleSaleBalances[id] -= 1;
+        if (tokensForSingleSaleBalances[id] == 0) {
+            _tokensForSingleSale.remove(id);
+        }
+
+        // Transfer
+        _balances[id][address(this)] = fromBalance - 1;
+        _balances[id][msg.sender] += 1;
+        emit TransferSingle(msg.sender, address(this), msg.sender, id, 1);
+    }
+
+
+    /*
+        Pack marketplace functionality
+    */
+
+    // Set wei price for  packs
+    function setPackPrice(uint256 price) external onlyOwner {
+        packPrice = price;
+    }
+
+    function setForPackSale(uint256 id, uint256 amount) external onlyOwner {
+        require(amount > 0, "Must specify an amount of at least 1");
+        require(_tokenExists(id), "Token does not exist");
+        require(packPrice != 0, "Pack price must be set");
+        require(amount <= _tokensHeldBalances[id], "Specified amount exceeds held amount available");
+
+        // Removing from tokensHeld
+        _tokensHeldBalances[id] -= amount;
+        if (_tokensHeldBalances[id] < 1) {
+            _tokensHeld.remove(id);
+        }
+
+        // Adding to tokensForPackSale
+        if (tokensForPackSaleBalances[id] == 0) {
+            _tokensForPackSale.add(id);
+        }
+        tokensForPackSaleBalances[id] += amount;
+    }
+
+    function removeFromPackSale(uint256 id, uint256 amount)
+        external
+        onlyOwner
+    {
+        require(_tokenExists(id), "Token does not exist");
+        require(amount > 0, "Must specify an amount of at least 1");
+        require(tokensForPackSaleBalances[id] > 0, "Token is not for sale");
+        require(
+            tokensForPackSaleBalances[id] >= amount,
+            "Amount specified exceeds token set for sale"
+        );
+
+        // Removing from tokensForPackSale
+        tokensForPackSaleBalances[id] -= amount;
+        if (tokensForPackSaleBalances[id] == 0) {
+            _tokensForPackSale.remove(id);
+        }
+
+        // Adding back to tokensHeld
+        if (_tokensHeldBalances[id] == 0) {
+            // if new token
+            _tokensHeld.add(id);
+        }
+        _tokensHeldBalances[id] += amount;
+    }
+
+
+
 }
