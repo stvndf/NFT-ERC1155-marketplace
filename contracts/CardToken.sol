@@ -9,7 +9,6 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 contract CardToken is ERC1155, ERC1155Holder, Ownable {
-
     using EnumerableSet for EnumerableSet.UintSet;
 
     // Data for seasons
@@ -26,10 +25,9 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
     mapping(uint16 => uint256) public defaultSeasonPrices; // season => price
 
     // Pack marketplace variables
-    EnumerableSet.UintSet private _tokensForPackSale; // all ids for pack sale
+    EnumerableSet.UintSet private _tokensForPackSale; // all ids for pack sale //|//TEST removed when bal is 0
     mapping(uint256 => uint256) public tokensForPackSaleBalances; // id => balance (amount for single sale)
     uint256 public packPrice;
-
 
     constructor(string memory uri) ERC1155(uri) {}
 
@@ -47,14 +45,13 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
         return _tokenSeason[id] != 0; // tokenSeason confirms inexistence if value is 0
     }
 
-
     /*
         Getters
     */
 
     // Obtain seaon token belongs to
     function getSeasonOfTokenId(uint256 id) public view returns (uint16) {
-        require(_tokenExists(id), "Token does not exist");
+        require(_tokenExists(id));
         return _tokenSeason[id];
     }
 
@@ -62,9 +59,11 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
     function getTokenHeldByIndex(uint256 index) public view returns (uint256) {
         return _tokensHeld.at(index);
     }
+
     function getTokensHeldSize() public view returns (uint256) {
         return _tokensHeld.length();
     }
+
     function getHeldBalanceOfTokenId(uint256 id) public view returns (uint256) {
         return _tokensHeldBalances[id];
     }
@@ -77,6 +76,7 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
     {
         return _tokensForSingleSale.at(index);
     }
+
     function getTokensForSingleSaleSize() public view returns (uint256) {
         return _tokensForSingleSale.length();
     }
@@ -89,12 +89,10 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
     {
         return _tokensForPackSale.at(index);
     }
+
     function getTokensForPackSaleSize() public view returns (uint256) {
         return _tokensForPackSale.length();
     }
-
-
-
 
     // Mint a particular token
     function mintToken(
@@ -102,14 +100,11 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
         uint16 season,
         uint256 amount
     ) external onlyOwner {
-        require(season != 0, "Season cannot be 0"); // tokenSeason uses 0 value to confirm token inexistence
-        require(amount > 0, "Must mint at least 1 of the token");
+        require(season != 0); // tokenSeason uses 0 value to confirm token inexistence
+        require(amount > 0);
         if (_tokenSeason[id] != 0) {
             //TEST that all minted tokens have season
-            require(
-                _tokenSeason[id] == season,
-                "Existing id matches with a different season"
-            ); // mismatching id-season
+            require(_tokenSeason[id] == season); // mismatching id-season
         } else {
             _tokenSeason[id] = season; // if token doesn't exist, add it and its season
         }
@@ -151,11 +146,10 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
 
     // Withdraw ether from contract.
     function withdraw() external onlyOwner {
-        require(address(this).balance > 0, "Balance must be positive");
+        require(address(this).balance > 0);
         (bool success, ) = msg.sender.call{value: address(this).balance}("");
-        require(success == true, "Failed to withdraw ether");
+        require(success == true);
     }
-
 
     /*
         Single marketplace functionality
@@ -173,14 +167,14 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
     }
 
     function setForSingleSale(uint256 id, uint256 amount) external onlyOwner {
-        require(amount > 0, "Must specify an amount of at least 1");
+        require(amount > 0);
         require(_tokenExists(id), "Token does not exist");
         require(
             (defaultSeasonPrices[_tokenSeason[id]] != 0) ||
                 (tokensForSingleSalePrices[id] != 0),
             "Card or card's season must have a price set"
         );
-        require(amount <= _tokensHeldBalances[id], "Specified amount exceeds held amount available");
+        require(amount <= _tokensHeldBalances[id]);
 
         // Removing from tokensHeld
         _tokensHeldBalances[id] -= amount;
@@ -199,14 +193,13 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
         external
         onlyOwner
     {
-        require(_tokenExists(id), "Token does not exist");
-        require(amount > 0, "Must specify an amount of at least 1");
+        require(_tokenExists(id));
+        require(amount > 0);
         require(tokensForSingleSaleBalances[id] > 0, "Token is not for sale");
         require(
             tokensForSingleSaleBalances[id] >= amount,
             "Amount specified exceeds token set for sale"
         );
-
 
         // Removing from tokensForSingleSale
         tokensForSingleSaleBalances[id] -= amount;
@@ -246,7 +239,6 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
         emit TransferSingle(msg.sender, address(this), msg.sender, id, 1);
     }
 
-
     /*
         Pack marketplace functionality
     */
@@ -260,7 +252,10 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
         require(amount > 0, "Must specify an amount of at least 1");
         require(_tokenExists(id), "Token does not exist");
         require(packPrice != 0, "Pack price must be set");
-        require(amount <= _tokensHeldBalances[id], "Specified amount exceeds held amount available");
+        require(
+            amount <= _tokensHeldBalances[id],
+            "Specified amount exceeds held amount available"
+        );
 
         // Removing from tokensHeld
         _tokensHeldBalances[id] -= amount;
@@ -275,10 +270,7 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
         tokensForPackSaleBalances[id] += amount;
     }
 
-    function removeFromPackSale(uint256 id, uint256 amount)
-        external
-        onlyOwner
-    {
+    function removeFromPackSale(uint256 id, uint256 amount) external onlyOwner {
         require(_tokenExists(id), "Token does not exist");
         require(amount > 0, "Must specify an amount of at least 1");
         require(tokensForPackSaleBalances[id] > 0, "Token is not for sale");
@@ -300,7 +292,4 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
         }
         _tokensHeldBalances[id] += amount;
     }
-
-
-
 }
