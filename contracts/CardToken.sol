@@ -51,7 +51,7 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
 
     // Obtain seaon token belongs to
     function getSeasonOfTokenId(uint256 id) public view returns (uint16) {
-        require(_tokenExists(id));
+        require(_tokenExists(id), "Token does not exist");
         return _tokenSeason[id];
     }
 
@@ -100,11 +100,11 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
         uint16 season,
         uint256 amount
     ) external onlyOwner {
-        require(season != 0); // tokenSeason uses 0 value to confirm token inexistence
-        require(amount > 0);
+        require(season != 0, "Season cannot be 0"); // tokenSeason uses 0 value to confirm token inexistence
+        require(amount > 0, "Must mint at least 1 of the token");
         if (_tokenSeason[id] != 0) {
             //TEST that all minted tokens have season
-            require(_tokenSeason[id] == season); // mismatching id-season
+            require(_tokenSeason[id] == season, "Existing id matches with a different season"); // mismatching id-season
         } else {
             _tokenSeason[id] = season; // if token doesn't exist, add it and its season
         }
@@ -167,14 +167,14 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
     }
 
     function setForSingleSale(uint256 id, uint256 amount) external onlyOwner {
-        require(amount > 0);
+        require(amount > 0, "Must specify an amount of at least 1");
         require(_tokenExists(id), "Token does not exist");
         require(
             (defaultSeasonPrices[_tokenSeason[id]] != 0) ||
                 (tokensForSingleSalePrices[id] != 0),
             "Card or card's season must have a price set"
         );
-        require(amount <= _tokensHeldBalances[id]);
+        require(amount <= _tokensHeldBalances[id], "Specified amount exceeds held amount available");
 
         // Removing from tokensHeld
         _tokensHeldBalances[id] -= amount;
@@ -193,8 +193,8 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
         external
         onlyOwner
     {
-        require(_tokenExists(id));
-        require(amount > 0);
+        require(_tokenExists(id), "Token does not exist");
+        require(amount > 0, "Must specify an amount of at least 1");
         require(tokensForSingleSaleBalances[id] > 0, "Token is not for sale");
         require(
             tokensForSingleSaleBalances[id] >= amount,
@@ -293,49 +293,49 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
         _tokensHeldBalances[id] += amount;
     }
 
-    function buyPack() public payable {
-        uint256 totalCardsAvailable; // sums together each id's balance
-        for (uint256 i = 0; i < _tokensForPackSale.length(); i++) {
-            totalCardsAvailable += tokensForPackSaleBalances[
-                _tokensForPackSale.at(i)
-            ];
-        }
-        require(msg.value == packPrice, "Ether sent does not match price");
-        require(totalCardsAvailable >= 4, "At least 4 cards must be available");
-        uint256 preHash = (block.number * block.difficulty) / block.timestamp;
-        uint256[] memory selectedIds = new uint256[](4);
-        for (uint256 i = 0; i < 4; i++) {
-            // Equal chance of unique tokens, can be duplicate
-            uint256 postHash = uint256(keccak256(abi.encode(preHash + i)));
-            uint256 index = postHash % _tokensForPackSale.length();
-            uint256 selectedId = _tokensForPackSale.at(index);
+    // function buyPack() public payable {
+    //     uint256 totalCardsAvailable; // sums together each id's balance
+    //     for (uint256 i = 0; i < _tokensForPackSale.length(); i++) {
+    //         totalCardsAvailable += tokensForPackSaleBalances[
+    //             _tokensForPackSale.at(i)
+    //         ];
+    //     }
+    //     require(msg.value == packPrice, "Ether sent does not match price");
+    //     require(totalCardsAvailable >= 4, "At least 4 cards must be available");
+    //     uint256 preHash = (block.number * block.difficulty) / block.timestamp;
+    //     uint256[] memory selectedIds = new uint256[](4);
+    //     for (uint256 i = 0; i < 4; i++) {
+    //         // Equal chance of unique tokens, can be duplicate
+    //         uint256 postHash = uint256(keccak256(abi.encode(preHash + i)));
+    //         uint256 index = postHash % _tokensForPackSale.length();
+    //         uint256 selectedId = _tokensForPackSale.at(index);
 
-            tokensForPackSaleBalances[selectedId] -= 1;
-            uint256 fromBalance = _balances[selectedId][address(this)];
-            require(
-                fromBalance >= 1,
-                "ERC1155: insufficient balance for transfer"
-            );
-            if (tokensForPackSaleBalances[selectedId] == 0) {
-                _tokensForPackSale.remove(selectedId);
-            }
-            // Transfer
-            _balances[selectedId][address(this)] = fromBalance - 1;
-            _balances[selectedId][msg.sender] += 1;
+    //         tokensForPackSaleBalances[selectedId] -= 1;
+    //         uint256 fromBalance = _balances[selectedId][address(this)];
+    //         require(
+    //             fromBalance >= 1,
+    //             "ERC1155: insufficient balance for transfer"
+    //         );
+    //         if (tokensForPackSaleBalances[selectedId] == 0) {
+    //             _tokensForPackSale.remove(selectedId);
+    //         }
+    //         // Transfer
+    //         _balances[selectedId][address(this)] = fromBalance - 1;
+    //         _balances[selectedId][msg.sender] += 1;
 
-            selectedIds[i] = selectedId;
-        }
-        uint256[] memory counts = new uint256[](4);
-        counts[0] = 1;
-        counts[1] = 1;
-        counts[2] = 1;
-        counts[3] = 1;
-        emit TransferBatch(
-            msg.sender,
-            address(this),
-            msg.sender,
-            selectedIds,
-            counts
-        );
-    }
+    //         selectedIds[i] = selectedId;
+    //     }
+    //     uint256[] memory counts = new uint256[](4);
+    //     counts[0] = 1;
+    //     counts[1] = 1;
+    //     counts[2] = 1;
+    //     counts[3] = 1;
+    //     emit TransferBatch(
+    //         msg.sender,
+    //         address(this),
+    //         msg.sender,
+    //         selectedIds,
+    //         counts
+    //     );
+    // }
 }
