@@ -292,4 +292,50 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
         }
         _tokensHeldBalances[id] += amount;
     }
+
+    function buyPack() public payable {
+        uint256 totalCardsAvailable; // sums together each id's balance
+        for (uint256 i = 0; i < _tokensForPackSale.length(); i++) {
+            totalCardsAvailable += tokensForPackSaleBalances[
+                _tokensForPackSale.at(i)
+            ];
+        }
+        require(msg.value == packPrice, "Ether sent does not match price");
+        require(totalCardsAvailable >= 4, "At least 4 cards must be available");
+        uint256 preHash = (block.number * block.difficulty) / block.timestamp;
+        uint256[] memory selectedIds = new uint256[](4);
+        for (uint256 i = 0; i < 4; i++) {
+            // Equal chance of unique tokens, can be duplicate
+            uint256 postHash = uint256(keccak256(abi.encode(preHash + i)));
+            uint256 index = postHash % _tokensForPackSale.length();
+            uint256 selectedId = _tokensForPackSale.at(index);
+
+            tokensForPackSaleBalances[selectedId] -= 1;
+            uint256 fromBalance = _balances[selectedId][address(this)];
+            require(
+                fromBalance >= 1,
+                "ERC1155: insufficient balance for transfer"
+            );
+            if (tokensForPackSaleBalances[selectedId] == 0) {
+                _tokensForPackSale.remove(selectedId);
+            }
+            // Transfer
+            _balances[selectedId][address(this)] = fromBalance - 1;
+            _balances[selectedId][msg.sender] += 1;
+
+            selectedIds[i] = selectedId;
+        }
+        uint256[] memory counts = new uint256[](4);
+        counts[0] = 1;
+        counts[1] = 1;
+        counts[2] = 1;
+        counts[3] = 1;
+        emit TransferBatch(
+            msg.sender,
+            address(this),
+            msg.sender,
+            selectedIds,
+            counts
+        );
+    }
 }
