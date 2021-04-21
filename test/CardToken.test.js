@@ -1,7 +1,5 @@
 //| //TODO onlyOwner all funcs where appropriate
 
-//TODO consider receiver
-
 const { web3 } = require("hardhat");
 const { expectRevert } = require("@openzeppelin/test-helpers");
 
@@ -16,28 +14,33 @@ contract("CardToken", (accounts) => {
     contract = await Contract.new(uri);
   });
 
-  // describe("Withdraw function", () => { //TODO this !
+  describe("Withdraw function", () => {
 
-  //   it("onlyOwner", async () => {
-  //     await contract.setSale({ from: owner });
-  //     await contract.mintCyclopes(1, { value: tier1Price });
-  //     await expectRevert(
-  //       contract.withdraw({ from: acc1 }),
-  //       "Ownable: caller is not the owner"
-  //     );
-  //     await contract.withdraw({ from: owner }); // expect success
-  //     assert.strictEqual(1,2)
-  //   });
-  //   it("Requires a positive balance", async () => {
-  //     await expectRevert(
-  //       contract.withdraw({ from: owner }),
-  //       "Balance must be positive"
-  //     );
-  //     await contract.setSale({ from: owner });
-  //     await contract.mintCyclopes(1, { value: tier1Price });
-  //     contract.withdraw({ from: owner }); // expect success
-  //   });
-  // })
+    it("onlyOwner", async () => {
+      await contract.mintTokens([0, 1], 1, [10, 20]);
+      await contract.setSeasonPrice(1, web3.utils.toWei("1"))
+      await contract.setForSingleSale(0, 6);
+      await contract.buySingleToken(0, {value: web3.utils.toWei("1")})
+
+      await expectRevert(
+        contract.withdraw({ from: acc1 }),
+        "Ownable: caller is not the owner"
+      );
+      await contract.withdraw({ from: owner }); // expect success
+    });
+    it("Requires a positive balance", async () => {
+      await expectRevert(
+        contract.withdraw({ from: owner }),
+        "Balance must be positive"
+      );
+      await contract.mintTokens([0, 1], 1, [10, 20]);
+      await contract.setPackPrice(web3.utils.toWei("1"));
+      await contract.setForPackSale(0, 10);
+      await contract.buyPack({value: web3.utils.toWei("1")})
+
+      await contract.withdraw({ from: owner }); // expect success
+    });
+  })
 
   describe("Getter functions (excludes getters relating to sales)", () => {
     it("getSeasonOfTokenId function", async () => {
@@ -58,7 +61,7 @@ contract("CardToken", (accounts) => {
       assert.equal(item0, id);
     });
 
-    it("getTokensHeldSize and getHeldBalanceOfTokenId functions", async () => {
+    it("getTokensHeldSize and tokensHeldBalances functions", async () => {
       contract = await Contract.new(uri); // resetting to obtain accurate size
       assert.equal(await contract.getTokensHeldSize(), 0);
       await contract.mintTokens([0], 1, [1]);
@@ -67,142 +70,10 @@ contract("CardToken", (accounts) => {
       await contract.mintTokens([1], 1, [1]);
       assert.equal(await contract.getTokensHeldSize(), 2);
 
-      assert.equal(await contract.getHeldBalanceOfTokenId(0), 2);
-      assert.equal(await contract.getHeldBalanceOfTokenId(1), 1);
+      assert.equal(await contract.tokensHeldBalances(0), 2);
+      assert.equal(await contract.tokensHeldBalances(1), 1);
     });
   });
-
-  // describe("mintToken function", () => {
-  //   it("Does not mint season 0", async () => {
-  //     // Enabling season 0 would cause conflict when checking existence
-  //     await expectRevert(contract.mintTokens(0, 0, 1), "Season cannot be 0");
-  //     await contract.mintTokens(0, 1, 1);
-  //     assert.equal(Number(await contract.balanceOf(contract.address, 0)), 1);
-  //   });
-
-  //   it("Amount to mint must be at least 1", async () => {
-  //     await expectRevert(
-  //       contract.mintTokens(1, 1, 0),
-  //       "Must mint at least 1 of the token"
-  //     );
-  //     await contract.mintTokens(1, 1, 1);
-  //     assert.equal(Number(await contract.balanceOf(contract.address, 1)), 1);
-  //   });
-
-  //   it("Must not permit mismatching id-season pairs", async () => {
-  //     await contract.mintTokens(2, 1, 1);
-  //     await contract.mintTokens(2, 1, 1); // should not throw as it's the same season
-  //     await expectRevert(
-  //       contract.mintTokens(2, 20, 1),
-  //       "Existing id matches with a different season"
-  //     );
-  //   });
-
-  //   it("Creates new tokenSeason mapping pair for new ids", async () => {
-  //     await contract.mintTokens(3, 2, 1);
-  //     assert.equal(Number(await contract.getSeasonOfTokenId(3)), 2);
-  //     await expectRevert.unspecified(contract.mintTokens(3, 20, 1)); // should have no impact as it reverts
-  //     assert.equal(Number(await contract.getSeasonOfTokenId(3)), 2);
-  //     await contract.mintTokens(4, 20, 1);
-  //     assert.equal(Number(await contract.getSeasonOfTokenId(4)), 20);
-  //   });
-
-  //   it("Balance adds correctly", async () => {
-  //     await contract.mintTokens(5, 2, 1);
-  //     assert.equal(Number(await contract.balanceOf(contract.address, 5)), 1);
-  //     await contract.mintTokens(5, 2, 8000);
-  //     assert.equal(Number(await contract.balanceOf(contract.address, 5)), 8001);
-  //   });
-
-  //   it("Minting adds to _tokensHeld and tokenHeldBalances correctly", async () => {
-  //     contract = await Contract.new(uri);
-  //     await contract.mintTokens(6, 3, 66);
-  //     await contract.mintTokens(7, 4, 7000);
-  //     await contract.mintTokens(7, 4, 10_000);
-
-  //     assert.equal(Number(await contract.getTokenHeldByIndex(0)), 6);
-  //     assert.equal(Number(await contract.getHeldBalanceOfTokenId(6)), 66);
-
-  //     assert.equal(Number(await contract.getTokenHeldByIndex(1)), 7);
-  //     assert.equal(Number(await contract.getHeldBalanceOfTokenId(7)), 17_000);
-  //   });
-  // });
-
-  // describe("mintTokens function", () => {
-  //   it("Does not mint season 0", async () => {
-  //     // Enabling season 0 would cause conflict when checking existence
-  //     await expectRevert(
-  //       contract.mintTokens([0, 100], 0, [0, 10]),
-  //       "Season cannot be 0"
-  //     );
-  //     await contract.mintTokens([0, 100], 1, [1, 10]);
-  //     assert.equal(Number(await contract.balanceOf(contract.address, 0)), 1);
-  //     assert.equal(Number(await contract.balanceOf(contract.address, 100)), 10);
-  //   });
-
-  //   it("Amount to mint must be at least 1", async () => {
-  //     await expectRevert(
-  //       contract.mintTokens([1, 101], 1, [0, 2]),
-  //       "Must mint at least 1 of the token"
-  //     );
-  //     await contract.mintTokens([1, 101], 1, [1, 11]);
-  //     assert.equal(Number(await contract.balanceOf(contract.address, 1)), 1);
-  //     assert.equal(Number(await contract.balanceOf(contract.address, 101)), 11);
-  //   });
-
-  //   it("Must not permit mismatching id-season pairs", async () => {
-  //     await contract.mintTokens([2, 102], 1, [1, 1]);
-  //     await contract.mintTokens([2, 102], 1, [1, 1]); // should not throw as it's the same season
-  //     await expectRevert(
-  //       contract.mintTokens([99, 2], 20, [1, 1]),
-  //       "Existing id matches with a different season"
-  //     );
-  //   });
-
-  //   it("Creates new tokenSeason mapping pair for new ids", async () => {
-  //     await contract.mintTokens([3, 103], 2, [1, 1]);
-  //     assert.equal(Number(await contract.getSeasonOfTokenId(3)), 2);
-  //     assert.equal(Number(await contract.getSeasonOfTokenId(103)), 2);
-  //     await expectRevert.unspecified(contract.mintTokens([3, 103], 20, [1, 1])); // should have no impact as it reverts
-  //     assert.equal(Number(await contract.getSeasonOfTokenId(3)), 2);
-  //     assert.equal(Number(await contract.getSeasonOfTokenId(103)), 2);
-  //     await contract.mintTokens([4, 104], 20, [1, 1]);
-  //     assert.equal(Number(await contract.getSeasonOfTokenId(4)), 20);
-  //     assert.equal(Number(await contract.getSeasonOfTokenId(104)), 20);
-  //   });
-
-  //   it("Balance adds correctly", async () => {
-  //     await contract.mintTokens([5, 105], 2, [1, 10]);
-  //     assert.equal(Number(await contract.balanceOf(contract.address, 5)), 1);
-  //     assert.equal(Number(await contract.balanceOf(contract.address, 105)), 10);
-  //     await contract.mintTokens([5, 105], 2, [8000, 8000]);
-  //     assert.equal(Number(await contract.balanceOf(contract.address, 5)), 8001);
-  //     assert.equal(Number(await contract.balanceOf(contract.address, 105)), 8010);
-  //   });
-
-  //   it("Minting adds to _tokensHeld and tokenHeldBalances correctly", async () => {
-  //     contract = await Contract.new(uri);
-  //     await contract.mintTokens([6, 106], 3, [66, 166]);
-  //     await contract.mintTokens([7, 107], 4, [7_000, 17_000]);
-  //     await contract.mintTokens([999, 7], 4, [1, 13_000]);
-
-  //     assert.equal(Number(await contract.getTokenHeldByIndex(0)), 6);
-  //     assert.equal(Number(await contract.getHeldBalanceOfTokenId(6)), 66)
-  //     assert.equal(Number(await contract.getTokenHeldByIndex(1)), 106);
-  //     assert.equal(Number(await contract.getHeldBalanceOfTokenId(106)), 166);;
-
-  //     assert.equal(Number(await contract.getTokenHeldByIndex(2)), 7);
-  //     assert.equal(Number(await contract.getHeldBalanceOfTokenId(7)), 20_000);
-  //   });
-
-    
-  //   it("Minting the same token works", async () => {
-  //     contract = await Contract.new(uri);
-
-  //     await contract.mintTokens([0, 0], 1, [10, 15]);
-  //     assert.equal(Number(await contract.balanceOf(contract.address, 0)), 25)
-  //   });
-  // });
 
   describe("Single token marketplace", () => {
     it("setSeasonPrice function", async () => {
@@ -256,7 +127,7 @@ contract("CardToken", (accounts) => {
         await contract.setTokenPrice(5, web3.utils.toWei("5"));
         await expectRevert(
           contract.setForSingleSale(5, 2),
-          "Specified amount exceeds held amount available"
+          "Amount exceeds held amount available"
         );
 
         await contract.setForSingleSale(5, 1); // should succeed
@@ -271,23 +142,23 @@ contract("CardToken", (accounts) => {
         assert.equal(tokensForSaleSize, 1);
       });
 
-      it("Removed from (_tokensHeld & _tokensHeldBalances) and added to (_tokensForSingleSale & tokensForSingleSaleBalances) appropriately", async () => {
+      it("Removed from (_tokensHeld & tokensHeldBalances) and added to (_tokensForSingleSale & tokensForSingleSaleBalances) appropriately", async () => {
         contract = await Contract.new(uri);
 
         await contract.mintTokens([0], 1, [1]);
         await contract.mintTokens([1], 1, [10]);
 
         assert.equal(Number(await contract.getTokensHeldSize()), 2);
-        assert.equal(Number(await contract.getHeldBalanceOfTokenId(0)), 1);
-        assert.equal(Number(await contract.getHeldBalanceOfTokenId(1)), 10);
+        assert.equal(Number(await contract.tokensHeldBalances(0)), 1);
+        assert.equal(Number(await contract.tokensHeldBalances(1)), 10);
 
         await contract.setSeasonPrice(1, web3.utils.toWei("1"));
         await contract.setForSingleSale(0, 1);
         await contract.setForSingleSale(1, 8);
 
         assert.equal(Number(await contract.getTokensHeldSize()), 1); // 1 has been removed
-        assert.equal(Number(await contract.getHeldBalanceOfTokenId(0)), 0);
-        assert.equal(Number(await contract.getHeldBalanceOfTokenId(1)), 2);
+        assert.equal(Number(await contract.tokensHeldBalances(0)), 0);
+        assert.equal(Number(await contract.tokensHeldBalances(1)), 2);
 
         assert.equal(Number(await contract.getTokensForSingleSaleSize()), 2);
         assert.equal(
@@ -381,14 +252,14 @@ contract("CardToken", (accounts) => {
         await contract.setForSingleSale(0, 6); // half of them
 
         assert.equal(Number(await contract.balanceOf(contract.address, 0)), 10);
-        assert.equal(Number(await contract.getHeldBalanceOfTokenId(0)), 4);
+        assert.equal(Number(await contract.tokensHeldBalances(0)), 4);
         assert.equal(Number(await contract.tokensForSingleSaleBalances(0)), 6);
 
         await contract.buySingleToken(0, { from: acc1, value: ethVal });
 
         assert.equal(Number(await contract.balanceOf(contract.address, 0)), 9);
         assert.equal(Number(await contract.balanceOf(acc1, 0)), 1); // new owner
-        assert.equal(Number(await contract.getHeldBalanceOfTokenId(0)), 4);
+        assert.equal(Number(await contract.tokensHeldBalances(0)), 4);
         assert.equal(Number(await contract.tokensForSingleSaleBalances(0)), 5);
       });
     });
@@ -403,7 +274,7 @@ contract("CardToken", (accounts) => {
         await expectRevert(contract.removeFromSingleSale(0, 0), "Must specify an amount of at least 1")
         await contract.setSeasonPrice(50, "1");
         await contract.setForSingleSale(0, 1)
-        await expectRevert(contract.removeFromSingleSale(0, 2), "Amount specified exceeds token set for sale")
+        await expectRevert(contract.removeFromSingleSale(0, 2), "Amount exceeds token set for sale")
 
         await contract.mintTokens([1], 50, [1]);
         await expectRevert(contract.removeFromSingleSale(1, 1), "Token is not for sale")
@@ -423,7 +294,7 @@ contract("CardToken", (accounts) => {
         await contract.buySingleToken(0, { from: acc1, value: ethVal });
         assert.equal(Number(await contract.balanceOf(contract.address, 0)), 9);
         assert.equal(Number(await contract.balanceOf(acc1, 0)), 1); // new owner
-        assert.equal(Number(await contract.getHeldBalanceOfTokenId(0)), 4);
+        assert.equal(Number(await contract.tokensHeldBalances(0)), 4);
         assert.equal(Number(await contract.tokensForSingleSaleBalances(0)), 5);
 
         assert.equal(Number(await contract.getTokensForSingleSaleSize()), 1)
@@ -431,7 +302,7 @@ contract("CardToken", (accounts) => {
         await contract.removeFromSingleSale(0, 3);
         assert.equal(Number(await contract.balanceOf(contract.address, 0)), 9);
         assert.equal(Number(await contract.balanceOf(acc1, 0)), 1); // new owner
-        assert.equal(Number(await contract.getHeldBalanceOfTokenId(0)), 7);
+        assert.equal(Number(await contract.tokensHeldBalances(0)), 7);
         assert.equal(Number(await contract.tokensForSingleSaleBalances(0)), 2);
 
         assert.equal(Number(await contract.getTokensForSingleSaleSize()), 1)
@@ -471,7 +342,7 @@ contract("CardToken", (accounts) => {
           await contract.setPackPrice(web3.utils.toWei("5"));
           await expectRevert(
             contract.setForPackSale(5, 2),
-            "Specified amount exceeds held amount available"
+            "Amount exceeds held amount available"
           );
   
           await contract.setForPackSale(5, 1); // should succeed
@@ -486,23 +357,23 @@ contract("CardToken", (accounts) => {
           assert.equal(tokensForSaleSize, 1);
         });
   
-        it("Removed from (_tokensHeld & _tokensHeldBalances) and added to (_tokensForPackSale & tokensForPackSaleBalances) appropriately", async () => {
+        it("Removed from (_tokensHeld & tokensHeldBalances) and added to (_tokensForPackSale & tokensForPackSaleBalances) appropriately", async () => {
           contract = await Contract.new(uri);
   
           await contract.mintTokens([0], 1, [1]);
           await contract.mintTokens([1], 1, [10]);
   
           assert.equal(Number(await contract.getTokensHeldSize()), 2);
-          assert.equal(Number(await contract.getHeldBalanceOfTokenId(0)), 1);
-          assert.equal(Number(await contract.getHeldBalanceOfTokenId(1)), 10);
+          assert.equal(Number(await contract.tokensHeldBalances(0)), 1);
+          assert.equal(Number(await contract.tokensHeldBalances(1)), 10);
   
           await contract.setPackPrice(web3.utils.toWei("1"));
           await contract.setForPackSale(0, 1);
           await contract.setForPackSale(1, 8);
   
           assert.equal(Number(await contract.getTokensHeldSize()), 1); // 1 has been removed
-          assert.equal(Number(await contract.getHeldBalanceOfTokenId(0)), 0);
-          assert.equal(Number(await contract.getHeldBalanceOfTokenId(1)), 2);
+          assert.equal(Number(await contract.tokensHeldBalances(0)), 0);
+          assert.equal(Number(await contract.tokensHeldBalances(1)), 2);
   
           assert.equal(Number(await contract.getTokensForPackSaleSize()), 2);
           assert.equal(
@@ -530,7 +401,7 @@ contract("CardToken", (accounts) => {
     })
 
 
-
+//TODO test buyPack
 
 
 
@@ -547,9 +418,9 @@ contract("CardToken", (accounts) => {
       assert.equal(tokensHeldSize, "2")
       const tokenHeldByIndex1 = String(await contract.getTokenHeldByIndex(1))
       assert.equal(tokenHeldByIndex1, "1")
-      const heldBalanceOfToken0 = String(await contract.getHeldBalanceOfTokenId(0))
+      const heldBalanceOfToken0 = String(await contract.tokensHeldBalances(0))
       assert.equal(heldBalanceOfToken0, "4")
-      const heldBalanceOfToken1 = String(await contract.getHeldBalanceOfTokenId(1))
+      const heldBalanceOfToken1 = String(await contract.tokensHeldBalances(1))
       assert.equal(heldBalanceOfToken1, "5")
 
       const tokensForSingleSaleSize = String(await contract.getTokensForSingleSaleSize())
