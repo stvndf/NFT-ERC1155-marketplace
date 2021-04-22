@@ -2,7 +2,6 @@
 
 pragma solidity 0.8.3;
 
-import "hardhat/console.sol";
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -25,7 +24,7 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
     mapping(uint16 => uint256) public defaultSeasonPrices; // season => price
 
     // Pack marketplace variables
-    EnumerableSet.UintSet private _tokensForPackSale; // all ids for pack sale //|//TEST removed when bal is 0
+    EnumerableSet.UintSet private _tokensForPackSale; // all ids for pack sale
     mapping(uint256 => uint256) public tokensForPackSaleBalances; // id => balance (amount for single sale)
     uint256 public packPrice;
 
@@ -110,7 +109,7 @@ contract CardToken is ERC1155, ERC1155Holder, Ownable {
             }
             if (tokensHeldBalances[ids[i]] == 0) {
                 // if new token
-                _tokensHeld.add(ids[i]); //TODO ensure removed upon setForSale
+                _tokensHeld.add(ids[i]);
             }
             tokensHeldBalances[ids[i]] += amounts[i];
         }
